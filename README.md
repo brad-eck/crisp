@@ -1,6 +1,6 @@
 # Crisp
 
-This is a TUI project of mine for organizing and keeping track of tasks I have for home development ideas. Go is a language I am wanted to become more familiar with, and I thought this would be a great project for that.
+This is a TUI project of mine for organizing and keeping track of tasks I have for home development ideas. Go is a language I am wanting to become more familiar with, and I thought this would be a great project for that.
 
 ## Project Status
 
