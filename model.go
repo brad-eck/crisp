@@ -31,12 +31,19 @@ type Model struct {
 func NewModel() Model {
 	tasks, err := LoadTasks(filename)
 	nextID := len(tasks) + 1
+
+	for i := range tasks {
+		if tasks[i].Priority == "" {
+			tasks[i].Priority = "Low"
+		}
+		if tasks[i].ID >= nextID {
+			nextID = tasks[i].ID + 1
+		}
+	}
+
 	items := make([]list.Item, len(tasks))
 	for i, t := range tasks {
 		items[i] = taskItem{task: t}
-		if t.ID >= nextID {
-			nextID = t.ID + 1
-		}
 	}
 
 	l := list.New(items, list.NewDefaultDelegate(), 0, 0)
@@ -72,7 +79,31 @@ func (i taskItem) Title() string {
 		statusColor = lipgloss.Color("#00FF00") // Green
 	}
 	statusStyle := lipgloss.NewStyle().Foreground(statusColor)
-	return fmt.Sprintf("%s [%s]", i.task.Title, statusStyle.Render(i.task.Status))
+	
+	var priorityStr string
+	var priorityStyle lipgloss.Style
+	switch i.task.Priority {
+	case "High":
+		priorityStr = "[High]"
+		priorityStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF5555"))
+	case "Medium":
+		priorityStr = "[Med]"
+		priorityStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FFFF55"))
+	case "Low":
+		priorityStr = "[Low]"
+		priorityStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#888888"))
+	default:
+		priorityStr = ""
+	}
+
+	priorityRendered := priorityStyle.Render(priorityStr)
+
+	title := i.task.Title
+	if i.task.Complete {
+		title = lipgloss.NewStyle().Strikethrough(true).Foreground(lipgloss.Color("#888888")).Render(title)
+	}
+
+	return fmt.Sprintf("%s %s [%s]", priorityRendered, title, statusStyle.Render(i.task.Status))
 }
 
 func (i taskItem) Description() string { return "" }
@@ -136,6 +167,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 					}
 				}
+			case "1":
+				if selected, ok := m.list.SelectedItem().(taskItem); ok {
+					updateTaskPriority(&m, selected.task.ID, "High")
+				}
+			case "2":
+				if selected, ok := m.list.SelectedItem().(taskItem); ok {
+					updateTaskPriority(&m, selected.task.ID, "Medium")
+				}
+			case "3":
+				if selected, ok := m.list.SelectedItem().(taskItem); ok {
+					updateTaskPriority(&m, selected.task.ID, "Low")
+				}
 			}
 			var cmd tea.Cmd
 			m.list, cmd = m.list.Update(msg)
@@ -188,7 +231,18 @@ func (m Model) View() string {
 	case editMode:
 		return fmt.Sprintf("Edit Task:\n%s\n\n(esc to cancel)", m.textInput.View())
 	default:
-		help := lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Render("\n↑/↓ or j/k: navigate • a: add • enter: edit title • p: in progress • d: toggle done • q/esc: quit")
+		help := lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Render("\n↑/↓ or j/k: navigate • a: add • enter: edit • p: in progress • d: toggle done • x: delete • 1/2/3: priority (High/Med/Low) • q/esc: quit")
 		return m.list.View() + help
+	}
+}
+
+func updateTaskPriority(m *Model, id int, priority string) {
+	for i := range m.tasks {
+		if m.tasks[i].ID == id {
+			m.tasks[i].Priority = priority
+			m.list.SetItem(i, taskItem{task: m.tasks[i]})
+			_ = SaveTasks(filename, m.tasks)
+			break
+		}
 	}
 }

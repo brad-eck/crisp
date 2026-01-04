@@ -5,4 +5,5 @@ type Task struct {
 	Title    string `json:"title"`
 	Status   string `json:"status"` // "Todo", "In Progress", "Done"
 	Complete bool   `json:"complete"`
+	Priority string `json:"priority"`
 }
