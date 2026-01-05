@@ -11,4 +11,3 @@ TUI has been built, but is in early development and still has many more features
 - Delete task functionality
 - Some sort of ASCI art for Crisp logo
 - Due dates
-- Task priorities
