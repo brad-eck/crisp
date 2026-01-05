@@ -16,16 +16,18 @@ const (
 	viewMode mode = iota
 	addMode
 	editMode
+	deleteConfirmMode
 )
 
 type Model struct {
-	tasks      []Task
-	list       list.Model
-	textInput  textinput.Model
-	mode       mode
-	selectedID int
-	nextID     int
-	err        error
+	tasks        []Task
+	list         list.Model
+	textInput    textinput.Model
+	mode         mode
+	selectedID 	 int
+	taskToDelete int
+	nextID       int
+	err          error
 }
 
 func NewModel() Model {
@@ -50,6 +52,7 @@ func NewModel() Model {
 	l.Title = "Task Tracker"
 	l.Styles.Title = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#00FF00"))
 	l.SetShowStatusBar(false)
+	l.SetShowHelp(false)
 	l.SetFilteringEnabled(false)
 
 	ti := textinput.New()
@@ -57,12 +60,14 @@ func NewModel() Model {
 	ti.Focus()
 
 	return Model{
-		tasks:     tasks,
-		list:      l,
-		textInput: ti,
-		mode:      viewMode,
-		nextID:    nextID,
-		err:       err,
+		tasks:        tasks,
+		list:         l,
+		textInput:    ti,
+		mode:         viewMode,
+		selectedID:   0,
+		taskToDelete: -1,
+		nextID:       nextID,
+		err:          err,
 	}
 }
 
@@ -167,6 +172,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 					}
 				}
+			case "x":
+				if len(m.tasks) == 0 {
+					return m, nil
+				}
+				if selected, ok := m.list.SelectedItem().(taskItem); ok {
+					m.taskToDelete = selected.task.ID
+					m.mode = deleteConfirmMode
+				}
+				return m, nil
 			case "1":
 				if selected, ok := m.list.SelectedItem().(taskItem); ok {
 					updateTaskPriority(&m, selected.task.ID, "High")
@@ -195,7 +209,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 				if m.mode == addMode {
-					newTask := Task{ID: m.nextID, Title: title, Status: "Todo", Complete: false}
+					newTask := Task{ID: m.nextID, Title: title, Status: "Todo", Complete: false, Priority: "Low"}
 					m.tasks = append(m.tasks, newTask)
 					m.list.InsertItem(len(m.list.Items()), taskItem{task: newTask})
 					m.nextID++
@@ -215,6 +229,41 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var cmd tea.Cmd
 			m.textInput, cmd = m.textInput.Update(msg)
 			return m, cmd
+		case deleteConfirmMode:
+			switch msg.String() {
+			case "y":
+				if m.taskToDelete != -1 {
+					// Remove the task from the slice
+					newTasks := []Task{}
+					newItems := []list.Item{}
+					currentIndex := m.list.Index()
+					for i, t := range m.tasks {
+						if t.ID != m.taskToDelete {
+							newTasks = append(newTasks, t)
+							newItems = append(newItems, taskItem{task: t})
+						} else {
+							// Adjust cursor if deleting the selected item
+							if i == currentIndex {
+								if currentIndex > 0 {
+									currentIndex--
+								}
+							}
+						}
+					}
+					m.tasks = newTasks
+					m.list.SetItems(newItems)
+					m.list.Select(currentIndex)  // Reset cursor position
+					_ = SaveTasks(filename, m.tasks)
+				}
+				m.mode = viewMode
+				m.taskToDelete = -1
+				return m, nil
+			case "n", "esc":
+				m.mode = viewMode
+				m.taskToDelete = -1
+				return m, nil
+			}
+			return m, nil
 		}
 	}
 	return m, nil
@@ -230,8 +279,14 @@ func (m Model) View() string {
 		return fmt.Sprintf("Add New Task:\n%s\n\n(esc to cancel)", m.textInput.View())
 	case editMode:
 		return fmt.Sprintf("Edit Task:\n%s\n\n(esc to cancel)", m.textInput.View())
+	case deleteConfirmMode:
+		prompt := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FF5555")).
+			Bold(true).
+			Render("Delete this task? (y/n)")
+		return prompt + "\n\n" + m.list.View()
 	default:
-		help := lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Render("\n↑/↓ or j/k: navigate • a: add • enter: edit • p: in progress • d: toggle done • x: delete • 1/2/3: priority (High/Med/Low) • q/esc: quit")
+		help := lipgloss.NewStyle().Foreground(lipgloss.Color("#888888")).Render("\nCONTROLS: ↑/↓ or j/k: navigate • a: add • enter: edit • p: in progress • d: toggle done • x: delete • 1/2/3: priority (High/Med/Low) • q/esc: quit")
 		return m.list.View() + help
 	}
 }
